@@ -137,7 +137,7 @@ export default function Login() {
       </div>
 
       {/* Mock Local Logins (Crucial for Localhost testing) */}
-      <div>
+      {/* <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
           <div style={{ flexGrow: 1, height: '1px', backgroundColor: 'var(--outline-light)' }}></div>
           <span style={{ fontSize: '11px', color: 'var(--outline)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -174,7 +174,7 @@ export default function Login() {
             </button>
           ))}
         </div>
-      </div>
+      </div> */}
 
     </div>
   );

@@ -36,6 +36,7 @@ CREATE TABLE tickets (
     technician_id INT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT NOT NULL,
+    image_url VARCHAR(500) NULL,
     category VARCHAR(100) NOT NULL COMMENT 'Hardware, Software, Network, Document, Other',
     priority ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium',
     status ENUM('pending', 'assigned', 'in_progress', 'resolved', 'closed') DEFAULT 'pending',

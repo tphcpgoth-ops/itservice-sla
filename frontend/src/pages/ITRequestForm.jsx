@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE } from '../config';
-import { Clipboard, ShieldAlert, ArrowLeft, Send, CheckCircle } from 'lucide-react';
+import { Clipboard, ShieldAlert, ArrowLeft, Send, CheckCircle, Camera, Trash2, Image } from 'lucide-react';
 
 export default function ITRequestForm() {
   const navigate = useNavigate();
@@ -14,9 +14,12 @@ export default function ITRequestForm() {
     priority: 'medium'
   });
 
+  const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+
 
   const categories = [
     { value: 'Hardware', label: 'ฮาร์ดแวร์ (คอมพิวเตอร์, หน้าจอ, ปริ้นเตอร์)' },
@@ -32,6 +35,27 @@ export default function ITRequestForm() {
     { value: 'critical', label: 'วิกฤต (SLA 1 ชม. - ระบบล่ม)', desc: 'ระบบโรงพยาบาลล่ม หรือเครื่องแพทย์ขัดข้องเร่งด่วนที่สุด!' }
   ];
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setError('ขนาดรูปภาพต้องไม่เกิน 5MB');
+        return;
+      }
+      setImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setImage(null);
+    setImagePreview(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.title || !formData.description) {
@@ -43,13 +67,21 @@ export default function ITRequestForm() {
     setError(null);
 
     try {
+      const submitData = new FormData();
+      submitData.append('title', formData.title);
+      submitData.append('description', formData.description);
+      submitData.append('category', formData.category);
+      submitData.append('priority', formData.priority);
+      if (image) {
+        submitData.append('image', image);
+      }
+
       const res = await fetch(`${API_BASE}/tickets`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: submitData
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -174,6 +206,97 @@ export default function ITRequestForm() {
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             required
           ></textarea>
+        </div>
+
+        {/* Image Attachment Field */}
+        <div className="form-group">
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Camera size={16} />
+            แนบรูปภาพอาการเสีย (ไม่บังคับ)
+          </label>
+          <div style={{ marginTop: '6px' }}>
+            {!imagePreview ? (
+              <div 
+                style={{
+                  border: '2px dashed var(--outline-light)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '24px 16px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  backgroundColor: 'var(--surface-low)',
+                  transition: 'border-color 0.2s',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+                onClick={() => document.getElementById('file-upload-input').click()}
+                onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--primary)'}
+                onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--outline-light)'}
+              >
+                <Image size={32} style={{ color: 'var(--outline)' }} />
+                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--on-surface)' }}>
+                  คลิกที่นี่เพื่อเลือกหรืออัปโหลดรูปภาพ
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--outline)' }}>
+                  รองรับไฟล์ PNG, JPG, JPEG ขนาดไม่เกิน 5MB
+                </span>
+                <input
+                  id="file-upload-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  style={{ display: 'none' }}
+                />
+              </div>
+            ) : (
+              <div style={{ 
+                position: 'relative', 
+                borderRadius: 'var(--radius-md)', 
+                overflow: 'hidden', 
+                border: '1px solid var(--outline-light)',
+                maxWidth: '100%',
+                maxHeight: '260px',
+                display: 'inline-block'
+              }}>
+                <img 
+                  src={imagePreview} 
+                  alt="Attachment Preview" 
+                  style={{ 
+                    maxHeight: '250px', 
+                    maxWidth: '100%', 
+                    display: 'block',
+                    objectFit: 'contain'
+                  }} 
+                />
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: '8px',
+                    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '32px',
+                    height: '32px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgb(220, 38, 38)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Priorities radio list */}

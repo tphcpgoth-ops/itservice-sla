@@ -19,6 +19,7 @@ export default function TaskProgress() {
   // Technician status changing form
   const [statusNote, setStatusNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   useEffect(() => {
     if (!token) {
@@ -168,6 +169,31 @@ export default function TaskProgress() {
         <p style={{ fontSize: '13px', color: 'var(--on-surface-variant)', marginBottom: '16px', whiteSpace: 'pre-wrap' }}>
           {ticket.description}
         </p>
+
+        {ticket.image_url && (
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--outline)', marginBottom: '6px', textTransform: 'uppercase' }}>
+              รูปภาพแนบอาการเสีย:
+            </div>
+            <img 
+              src={ticket.image_url} 
+              alt="อาการเสียแนบมา" 
+              onClick={() => setZoomedImage(ticket.image_url)}
+              style={{ 
+                maxWidth: '100%', 
+                maxHeight: '180px', 
+                borderRadius: '6px', 
+                border: '1px solid var(--outline-light)',
+                cursor: 'pointer',
+                objectFit: 'cover',
+                display: 'block',
+                transition: 'opacity 0.2s'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
+              onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
+            />
+          </div>
+        )}
 
         {/* Metadata info grid */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--outline-light)', paddingTop: '12px', fontSize: '12px', color: 'var(--on-surface-variant)' }}>
@@ -394,6 +420,39 @@ export default function TaskProgress() {
             <Send size={16} />
             ประเมินคะแนนและปิดเคสซ่อม
           </button>
+        </div>
+      )}
+      {/* Lightbox Zoom Modal Overlay */}
+      {zoomedImage && (
+        <div 
+          onClick={() => setZoomedImage(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            animation: 'fadein 0.2s'
+          }}
+        >
+          <img 
+            src={zoomedImage} 
+            alt="Zoomed View" 
+            style={{ 
+              maxWidth: '100%', 
+              maxHeight: '100%', 
+              objectFit: 'contain',
+              borderRadius: '8px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+            }} 
+          />
+          <style>{`@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }`}</style>
         </div>
       )}
 

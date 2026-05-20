@@ -251,6 +251,23 @@ export default function TaskList() {
                     }}>
                       {ticket.priority}
                     </span>
+
+                    {/* Image Attachment indicator badge */}
+                    {ticket.image_url && (
+                      <span style={{
+                        fontSize: '10px',
+                        fontWeight: '700',
+                        color: 'var(--primary)',
+                        backgroundColor: 'var(--primary-light)',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '2px'
+                      }}>
+                        📷 มีรูปแนบ
+                      </span>
+                    )}
                   </div>
 
                   {/* Title */}

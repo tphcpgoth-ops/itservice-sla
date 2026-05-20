@@ -6,6 +6,8 @@ const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const querystring = require('querystring');
 const path = require('path');
+const multer = require('multer');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -14,6 +16,41 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Setup Multer for image uploads
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, 'ticket-' + uniqueSuffix + ext);
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // limit 5MB
+  fileFilter: function (req, file, cb) {
+    const filetypes = /jpeg|jpg|png|gif|webp/;
+    const mimetype = filetypes.test(file.mimetype);
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    if (mimetype && extname) {
+      return cb(null, true);
+    }
+    cb(new Error('อนุญาตเฉพาะรูปภาพเท่านั้น (jpg, jpeg, png, gif, webp)'));
+  }
+});
+
+// Serve static uploaded files
+app.use('/uploads', express.static(uploadDir));
+
 
 // MySQL Connection Pool
 let pool;
@@ -421,59 +458,76 @@ app.get('/api/tickets/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// 3. Create Ticket
-app.post('/api/tickets', authenticateToken, async (req, res) => {
-  const { title, description, category, priority } = req.body;
-  if (!title || !description || !category) {
-    return res.status(400).json({ error: 'Title, description and category are required' });
-  }
-
-  try {
-    // DYNAMIC SLA QUERY: Fetch SLA minutes configuration from the MySQL database!
-    const [slaRows] = await pool.query('SELECT minutes FROM sla_settings WHERE priority = ?', [priority || 'medium']);
-    let slaMinutes = 240; // Fallback to 4 hours if not set
-    if (slaRows.length > 0) {
-      slaMinutes = slaRows[0].minutes;
+// 3. Create Ticket (With Image Upload Support)
+app.post('/api/tickets', authenticateToken, (req, res) => {
+  upload.single('image')(req, res, async function (err) {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ error: `อัปโหลดผิดพลาด: ${err.message}` });
+    } else if (err) {
+      return res.status(400).json({ error: err.message });
     }
 
-    const now = new Date();
-    const slaDeadline = new Date(now.getTime() + slaMinutes * 60000);
-
-    // Generate Code: IT-YYYYMMDD-[RANDOM_NUM]
-    const dateStr = now.toISOString().slice(0,10).replace(/-/g,"");
-    const rand = Math.floor(1000 + Math.random() * 9000);
-    const ticketCode = `IT-${dateStr}-${rand}`;
-
-    const [result] = await pool.query(`
-      INSERT INTO tickets (ticket_code, requester_id, title, description, category, priority, status, sla_minutes, sla_deadline)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [ticketCode, req.user.id, title, description, category, priority || 'medium', 'pending', slaMinutes, slaDeadline]);
-
-    const ticketId = result.insertId;
-
-    // Log the creation
-    await pool.query(`
-      INSERT INTO ticket_logs (ticket_id, actor_id, action, note)
-      VALUES (?, ?, 'Created', ?)
-    `, [ticketId, req.user.id, 'เปิดตั๋วแจ้งซ่อมเข้าระบบ']);
-
-    // Send LINE Push to requester if LINE user ID exists
-    const fullLink = `${process.env.FRONTEND_URL}/ticket/${ticketId}`;
-    if (req.user.line_user_id) {
-      await sendLineNotification(
-        req.user.line_user_id,
-        title,
-        'Pending',
-        `ได้รับแจ้งงานระบบ '${category}' เรียบร้อยแล้ว กำลังรอช่างไอทีเข้าจัดการงาน`,
-        ticketCode,
-        fullLink
-      );
+    const { title, description, category, priority } = req.body;
+    if (!title || !description || !category) {
+      return res.status(400).json({ error: 'ชื่อเรื่อง, รายละเอียด และหมวดหมู่จำเป็นต้องระบุ' });
     }
 
-    res.status(201).json({ success: true, ticketId, ticketCode });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    try {
+      // Determine image URL
+      let imageUrl = null;
+      if (req.file) {
+        const host = req.get('host');
+        // If deployed behind reverse proxy, trust proto headers or default to http
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+        imageUrl = `${protocol}://${host}/uploads/${req.file.filename}`;
+      }
+
+      // DYNAMIC SLA QUERY: Fetch SLA minutes configuration from the MySQL database!
+      const [slaRows] = await pool.query('SELECT minutes FROM sla_settings WHERE priority = ?', [priority || 'medium']);
+      let slaMinutes = 240; // Fallback to 4 hours if not set
+      if (slaRows.length > 0) {
+        slaMinutes = slaRows[0].minutes;
+      }
+
+      const now = new Date();
+      const slaDeadline = new Date(now.getTime() + slaMinutes * 60000);
+
+      // Generate Code: IT-YYYYMMDD-[RANDOM_NUM]
+      const dateStr = now.toISOString().slice(0,10).replace(/-/g,"");
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      const ticketCode = `IT-${dateStr}-${rand}`;
+
+      const [result] = await pool.query(`
+        INSERT INTO tickets (ticket_code, requester_id, title, description, image_url, category, priority, status, sla_minutes, sla_deadline)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [ticketCode, req.user.id, title, description, imageUrl, category, priority || 'medium', 'pending', slaMinutes, slaDeadline]);
+
+      const ticketId = result.insertId;
+
+      // Log the creation
+      await pool.query(`
+        INSERT INTO ticket_logs (ticket_id, actor_id, action, note)
+        VALUES (?, ?, 'Created', ?)
+      `, [ticketId, req.user.id, 'เปิดตั๋วแจ้งซ่อมเข้าระบบ']);
+
+      // Send LINE Push to requester if LINE user ID exists
+      const fullLink = `${process.env.FRONTEND_URL}/ticket/${ticketId}`;
+      if (req.user.line_user_id) {
+        await sendLineNotification(
+          req.user.line_user_id,
+          title,
+          'Pending',
+          `ได้รับแจ้งงานระบบ '${category}' เรียบร้อยแล้ว กำลังรอช่างไอทีเข้าจัดการงาน`,
+          ticketCode,
+          fullLink
+        );
+      }
+
+      res.status(201).json({ success: true, ticketId, ticketCode, imageUrl });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 });
 
 // 4. Update Ticket Status (Assign, Start, Resolve, Close)
