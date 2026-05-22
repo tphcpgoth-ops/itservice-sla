@@ -1,7 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE } from '../config';
 import { Clipboard, ShieldAlert, ArrowLeft, Send, CheckCircle, Camera, Trash2, Image } from 'lucide-react';
+
+// Helper: Convert minutes to readable Thai time string
+function formatSlaTime(minutes) {
+  if (!minutes && minutes !== 0) return '...';
+  const mins = parseInt(minutes);
+  if (mins >= 60) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m > 0 ? `${h} ชม. ${m} นาที` : `${h} ชม.`;
+  }
+  return `${mins} นาที`;
+}
 
 export default function ITRequestForm() {
   const navigate = useNavigate();
@@ -20,6 +32,31 @@ export default function ITRequestForm() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
+  // Dynamic SLA settings from admin
+  const [slaSettings, setSlaSettings] = useState({ low: 480, medium: 240, high: 120, critical: 60 });
+
+  useEffect(() => {
+    fetchSlaSettings();
+  }, []);
+
+  const fetchSlaSettings = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/settings/sla`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.settings) {
+        const mapped = {};
+        data.settings.forEach(s => {
+          mapped[s.priority] = s.minutes;
+        });
+        setSlaSettings(prev => ({ ...prev, ...mapped }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch SLA settings:', err);
+    }
+  };
+
 
   const categories = [
     { value: 'Hardware', label: 'ฮาร์ดแวร์ (คอมพิวเตอร์, หน้าจอ, ปริ้นเตอร์)' },
@@ -29,10 +66,10 @@ export default function ITRequestForm() {
   ];
 
   const priorities = [
-    { value: 'low', label: 'ต่ำ (SLA 8 ชม. - เคสทั่วไป)', desc: 'ไม่มีผลกระทบต่อผู้ป่วยหรืองานบริการห้องตรวจ' },
-    { value: 'medium', label: 'ปานกลาง (SLA 4 ชม. - งานแผนก)', desc: 'อุปกรณ์บางส่วนเสียหาย แต่มีเครื่องทดแทนทำงานได้' },
-    { value: 'high', label: 'สูง (SLA 2 ชม. - บริการตรง)', desc: 'ส่งผลกระทบโดยตรงต่อคิวคนไข้หรือการบริการหลัก' },
-    { value: 'critical', label: 'วิกฤต (SLA 1 ชม. - ระบบล่ม)', desc: 'ระบบโรงพยาบาลล่ม หรือเครื่องแพทย์ขัดข้องเร่งด่วนที่สุด!' }
+    { value: 'low', label: `ต่ำ (SLA ${formatSlaTime(slaSettings.low)} - เคสทั่วไป)`, desc: 'ไม่มีผลกระทบต่อผู้ป่วยหรืองานบริการห้องตรวจ' },
+    { value: 'medium', label: `ปานกลาง (SLA ${formatSlaTime(slaSettings.medium)} - งานแผนก)`, desc: 'อุปกรณ์บางส่วนเสียหาย แต่มีเครื่องทดแทนทำงานได้' },
+    { value: 'high', label: `สูง (SLA ${formatSlaTime(slaSettings.high)} - บริการตรง)`, desc: 'ส่งผลกระทบโดยตรงต่อคิวคนไข้หรือการบริการหลัก' },
+    { value: 'critical', label: `วิกฤต (SLA ${formatSlaTime(slaSettings.critical)} - ระบบล่ม)`, desc: 'ระบบโรงพยาบาลล่ม หรือเครื่องแพทย์ขัดข้องเร่งด่วนที่สุด!' }
   ];
 
   const handleImageChange = (e) => {

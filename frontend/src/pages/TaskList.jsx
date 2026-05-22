@@ -14,7 +14,7 @@ export default function TaskList() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('all'); // all, active, completed
+  const [activeTab, setActiveTab] = useState('pending'); // pending, active, completed
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
@@ -50,6 +50,9 @@ export default function TaskList() {
   // Filters logic
   const filteredTickets = tickets.filter(ticket => {
     // 1. Tab filter
+    if (activeTab === 'pending') {
+      if (ticket.status !== 'pending') return false;
+    }
     if (activeTab === 'active') {
       if (ticket.status === 'resolved' || ticket.status === 'closed') return false;
     }
@@ -140,7 +143,7 @@ export default function TaskList() {
         marginBottom: '16px'
       }}>
         <button 
-          onClick={() => setActiveTab('all')}
+          onClick={() => setActiveTab('pending')}
           style={{
             flexGrow: 1,
             border: 'none',
@@ -149,12 +152,12 @@ export default function TaskList() {
             fontWeight: '600',
             borderRadius: '6px',
             cursor: 'pointer',
-            backgroundColor: activeTab === 'all' ? 'white' : 'transparent',
-            color: activeTab === 'all' ? 'var(--primary)' : 'var(--on-surface-variant)',
-            boxShadow: activeTab === 'all' ? '0 1px 4px rgba(0,0,0,0.05)' : 'none'
+            backgroundColor: activeTab === 'pending' ? 'white' : 'transparent',
+            color: activeTab === 'pending' ? 'var(--primary)' : 'var(--on-surface-variant)',
+            boxShadow: activeTab === 'pending' ? '0 1px 4px rgba(0,0,0,0.05)' : 'none'
           }}
         >
-          ทั้งหมด ({tickets.length})
+          รอรับงาน ({tickets.filter(t => t.status === 'pending').length})
         </button>
         <button 
           onClick={() => setActiveTab('active')}

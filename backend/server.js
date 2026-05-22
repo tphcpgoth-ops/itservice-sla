@@ -114,9 +114,18 @@ async function sendLineNotification(lineUserId, title, status, description, tick
   };
 
   let color = '#3b82f6'; // Blue
-  if (status === 'Pending') color = '#ef4444'; // Red
-  if (status === 'In Progress') color = '#f97316'; // Orange
-  if (status === 'Resolved') color = '#22c55e'; // Green
+  let buttonLabel = 'เปิดดูรายละเอียดงาน';
+  let buttonColor = '#0058bc';
+
+  const statusStr = status.toLowerCase();
+  if (statusStr.includes('pending') || statusStr.includes('รอรับงาน')) color = '#ba1a1a'; // Red
+  if (statusStr.includes('in progress') || statusStr.includes('กำลังดำเนินการ')) color = '#9e3d00'; // Orange
+  if (statusStr.includes('resolved') || statusStr.includes('สำเร็จ')) {
+    color = '#2e7d32'; // Green
+    buttonLabel = 'ประเมินความพึงพอใจ';
+    buttonColor = '#2e7d32';
+  }
+  if (statusStr.includes('closed') || statusStr.includes('ปิดตั๋ว')) color = '#4a5568'; // Gray
 
   const payload = {
     to: lineUserId,
@@ -185,11 +194,11 @@ async function sendLineNotification(lineUserId, title, status, description, tick
                 type: 'button',
                 action: {
                   type: 'uri',
-                  label: 'เปิดดูรายละเอียดงาน',
+                  label: buttonLabel,
                   uri: linkUrl || process.env.FRONTEND_URL
                 },
                 style: 'primary',
-                color: '#0058bc'
+                color: buttonColor
               }
             ]
           }
@@ -343,12 +352,136 @@ app.put('/api/auth/profile', authenticateToken, async (req, res) => {
   const { department, email } = req.body;
   try {
     await pool.query('UPDATE users SET department = ?, email = ? WHERE id = ?', [department, email, req.user.id]);
-    res.json({ success: true, message: 'Profile updated' });
+    
+    // Fetch updated user to re-sign JWT
+    const [users] = await pool.query('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const user = users[0];
+
+    // Sign JWT Token
+    const jwtToken = jwt.sign(
+      { id: user.id, display_name: user.display_name, role: user.role, department: user.department, line_user_id: user.line_user_id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({ success: true, message: 'อัปเดตข้อมูลผู้ใช้งานสำเร็จ', token: jwtToken, user });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// ==========================================
+// DYNAMIC DEPARTMENTS ENDPOINTS
+// ==========================================
+
+// 1. Get All Departments
+app.get('/api/departments', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM departments ORDER BY name ASC');
+    res.json({ success: true, departments: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Add New Department (Admin Only)
+app.post('/api/departments', authenticateToken, requireAdmin, async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'ชื่อแผนกจำเป็นต้องระบุ' });
+  }
+  try {
+    const [result] = await pool.query('INSERT INTO departments (name) VALUES (?)', [name.trim()]);
+    res.json({ success: true, message: 'เพิ่มแผนกสำเร็จ', id: result.insertId, name: name.trim() });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'แผนกนี้มีอยู่ในระบบแล้ว' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Edit Department Name (Admin Only)
+app.put('/api/departments/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { name } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'ชื่อแผนกจำเป็นต้องระบุ' });
+  }
+  try {
+    await pool.query('UPDATE departments SET name = ? WHERE id = ?', [name.trim(), id]);
+    res.json({ success: true, message: 'แก้ไขชื่อแผนกสำเร็จ', id, name: name.trim() });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'ชื่อแผนกนี้มีอยู่ในระบบแล้ว' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Delete Department (Admin Only)
+app.delete('/api/departments/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query('DELETE FROM departments WHERE id = ?', [id]);
+    res.json({ success: true, message: 'ลบแผนกสำเร็จ' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// USER MANAGEMENT ENDPOINTS (Admin Only)
+// ==========================================
+
+// 1. Get All Users
+app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const [users] = await pool.query('SELECT id, line_user_id, display_name, picture_url, role, department, email, created_at FROM users ORDER BY created_at DESC');
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Update User Role & Department
+app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { role, department } = req.body;
+  
+  if (!role || !department) return res.status(400).json({ error: 'Role and Department are required' });
+  
+  try {
+    await pool.query('UPDATE users SET role = ?, department = ? WHERE id = ?', [role, department, id]);
+    res.json({ success: true, message: 'อัปเดตข้อมูลผู้ใช้สำเร็จ' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Delete User
+app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  
+  // Prevent deleting self
+  if (parseInt(id) === req.user.id) {
+    return res.status(400).json({ error: 'ไม่สามารถลบบัญชีของตนเองได้' });
+  }
+
+  try {
+    await pool.query('DELETE FROM users WHERE id = ?', [id]);
+    res.json({ success: true, message: 'ลบผู้ใช้สำเร็จ' });
+  } catch (err) {
+    if (err.code === 'ER_ROW_IS_REFERENCED_2') {
+      res.status(400).json({ error: 'ไม่สามารถลบผู้ใช้นี้ได้ เนื่องจากมีประวัติการแจ้งซ่อมหรือปฏิบัติงานแล้ว (แนะนำให้ลดสิทธิ์แทน)' });
+    } else {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});
 
 // ==========================================
 // DYNAMIC SLA SETTINGS ENDPOINTS
@@ -518,6 +651,19 @@ app.post('/api/tickets', authenticateToken, (req, res) => {
           title,
           'Pending',
           `ได้รับแจ้งงานระบบ '${category}' เรียบร้อยแล้ว กำลังรอช่างไอทีเข้าจัดการงาน`,
+          ticketCode,
+          fullLink
+        );
+      }
+      
+      // Send LINE Push to IT Group
+      const groupId = process.env.LINE_IT_GROUP_ID;
+      if (groupId) {
+        await sendLineNotification(
+          groupId,
+          title,
+          'Pending',
+          `มีการแจ้งซ่อมใหม่ระบบ '${category}' (ด่วน: ${priority || 'medium'}) รอช่างไอทีรับงาน`,
           ticketCode,
           fullLink
         );
@@ -710,6 +856,11 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
       GROUP BY priority
     `);
 
+    // 6. SLA Settings (Dynamic from Admin Configuration)
+    const [slaSettingsRows] = await pool.query('SELECT * FROM sla_settings');
+    const slaSettings = {};
+    slaSettingsRows.forEach(s => { slaSettings[s.priority] = s.minutes; });
+
     res.json({
       statusCounts: statusCounts.reduce((acc, curr) => {
         acc[curr.status] = curr.count;
@@ -721,7 +872,8 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
       priorityCounts: priorityCounts.reduce((acc, curr) => {
         acc[curr.priority] = curr.count;
         return acc;
-      }, { low: 0, medium: 0, high: 0, critical: 0 })
+      }, { low: 0, medium: 0, high: 0, critical: 0 }),
+      slaSettings
     });
 
   } catch (err) {

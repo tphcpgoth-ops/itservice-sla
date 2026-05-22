@@ -70,7 +70,7 @@ export default function Login() {
 
   return (
     <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', flexGrow: 1, justifyContent: 'center' }}>
-      
+
       {/* Brand Header */}
       <div style={{ textAlign: 'center', marginBottom: '32px' }}>
         <div style={{
@@ -114,8 +114,8 @@ export default function Login() {
 
       {/* Real LINE Login Action */}
       <div style={{ marginBottom: '36px' }}>
-        <button 
-          onClick={handleLineLogin} 
+        <button
+          onClick={handleLineLogin}
           disabled={isLoading}
           className="btn btn-primary btn-block"
           style={{
@@ -132,7 +132,7 @@ export default function Login() {
           }}
         >
           <MessageSquare size={18} fill="white" />
-          เข้าสู่ระบบด้วย LINE Account
+          เข้าสู่ระบบด้วย LINE
         </button>
       </div>
 

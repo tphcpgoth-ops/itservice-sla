@@ -3,8 +3,46 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { API_BASE } from '../config';
 import { 
   ArrowLeft, RefreshCw, Clock, User, HardDrive, 
-  CheckSquare, Activity, MessageCircle, AlertTriangle, Send 
+  CheckSquare, Activity, MessageCircle, AlertTriangle, Send, Timer 
 } from 'lucide-react';
+
+// Helper: Convert minutes to readable Thai time string
+function formatSlaTime(minutes) {
+  if (!minutes && minutes !== 0) return '...';
+  const mins = parseInt(minutes);
+  if (mins >= 60) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m > 0 ? `${h} ชม. ${m} นาที` : `${h} ชม.`;
+  }
+  return `${mins} นาที`;
+}
+
+// Helper: Calculate remaining SLA time info
+function getSlaRemainingInfo(deadlineStr) {
+  const deadline = new Date(deadlineStr);
+  const now = new Date();
+  const diffMs = deadline - now;
+  const diffMins = Math.round(diffMs / 60000);
+
+  if (diffMins < 0) {
+    const absMins = Math.abs(diffMins);
+    const h = Math.floor(absMins / 60);
+    const m = absMins % 60;
+    return { 
+      text: `เกินกำหนด SLA แล้ว ${h > 0 ? `${h} ชม. ` : ''}${m} นาที`, 
+      isOverdue: true 
+    };
+  } else {
+    const h = Math.floor(diffMins / 60);
+    const m = diffMins % 60;
+    return { 
+      text: `เหลือเวลาอีก ${h > 0 ? `${h} ชม. ` : ''}${m} นาที`, 
+      isOverdue: false,
+      isUrgent: diffMins < 60
+    };
+  }
+}
 
 export default function TaskProgress() {
   const { id } = useParams();
@@ -216,6 +254,10 @@ export default function TaskProgress() {
               <span>ยังไม่มีช่างเทคนิครับงานแจ้งซ่อมนี้</span>
             </div>
           )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Timer size={14} style={{ color: 'var(--outline)' }} />
+            <span>ข้อตกลง SLA: <strong>{formatSlaTime(ticket.sla_minutes)}</strong></span>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
             <Clock size={14} />
             <span>เส้นตาย SLA: <strong>{new Date(ticket.sla_deadline).toLocaleString('th-TH')}</strong></span>
@@ -224,27 +266,30 @@ export default function TaskProgress() {
       </div>
 
       {/* SLA COMPLIANCE METRIC STATUS WARNING */}
-      {ticket.status !== 'resolved' && ticket.status !== 'closed' && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          padding: '12px',
-          backgroundColor: new Date(ticket.sla_deadline) < new Date() ? 'var(--status-pending-bg)' : 'var(--primary-light)',
-          color: new Date(ticket.sla_deadline) < new Date() ? 'var(--status-pending)' : 'var(--primary)',
-          borderRadius: 'var(--radius-md)',
-          fontSize: '12px',
-          fontWeight: '600',
-          marginBottom: '20px'
-        }}>
-          <Clock size={16} />
-          <span>
-            {new Date(ticket.sla_deadline) < new Date() ? 
-              '⚠️ ใบงานแจ้งซ่อมนี้ใช้เวลาเกินขีดจำกัด SLA โรงพยาบาลแล้ว!' : 
-              `กรุณาซ่อมบำรุงและอัปเดตงานให้สำเร็จก่อนเวลาเส้นตาย SLA`}
-          </span>
-        </div>
-      )}
+      {ticket.status !== 'resolved' && ticket.status !== 'closed' && (() => {
+        const slaInfo = getSlaRemainingInfo(ticket.sla_deadline);
+        return (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '12px',
+            backgroundColor: slaInfo.isOverdue ? 'var(--status-pending-bg)' : slaInfo.isUrgent ? '#fff3e0' : 'var(--primary-light)',
+            color: slaInfo.isOverdue ? 'var(--status-pending)' : slaInfo.isUrgent ? '#e65100' : 'var(--primary)',
+            borderRadius: 'var(--radius-md)',
+            fontSize: '12px',
+            fontWeight: '600',
+            marginBottom: '20px'
+          }}>
+            <Clock size={16} />
+            <span>
+              {slaInfo.isOverdue ? 
+                `⚠️ ใบงานแจ้งซ่อมนี้ใช้เวลาเกินขีดจำกัด SLA โรงพยาบาลแล้ว! (${slaInfo.text})` : 
+                `⏱️ กรุณาซ่อมบำรุงและอัปเดตงานให้สำเร็จก่อนเวลาเส้นตาย SLA (ข้อตกลง ${formatSlaTime(ticket.sla_minutes)} • ${slaInfo.text})`}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* DYNAMIC TIMELINE PROGRESS PANEL */}
       <h3 style={{ fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--outline)', marginBottom: '12px', letterSpacing: '0.05em' }}>

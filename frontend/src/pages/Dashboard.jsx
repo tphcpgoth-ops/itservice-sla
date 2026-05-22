@@ -3,8 +3,20 @@ import { useNavigate, Link } from 'react-router-dom';
 import { API_BASE } from '../config';
 import { 
   PlusCircle, ClipboardList, Activity, Clock, 
-  Settings, Award, RefreshCw, AlertOctagon, CheckCircle2 
+  Settings, Award, RefreshCw, AlertOctagon, CheckCircle2, Building2, Users 
 } from 'lucide-react';
+
+// Helper: Convert minutes to readable Thai time string
+function formatSlaTime(minutes) {
+  if (!minutes && minutes !== 0) return '...';
+  const mins = parseInt(minutes);
+  if (mins >= 60) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m > 0 ? `${h} ชม. ${m} นาที` : `${h} ชม.`;
+  }
+  return `${mins} นาที`;
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -276,7 +288,7 @@ export default function Dashboard() {
             
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                <span style={{ fontWeight: '600', color: 'var(--priority-critical)' }}>วิกฤต (Critical - SLA 1 ชม.)</span>
+                <span style={{ fontWeight: '600', color: 'var(--priority-critical)' }}>วิกฤต (Critical - SLA {formatSlaTime(stats.slaSettings?.critical)})</span>
                 <span>{stats.priorityCounts.critical} เคส</span>
               </div>
               <div style={{ height: '6px', backgroundColor: 'var(--surface-low)', borderRadius: '3px', overflow: 'hidden' }}>
@@ -290,7 +302,7 @@ export default function Dashboard() {
 
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                <span style={{ fontWeight: '600', color: 'var(--priority-high)' }}>สูง (High - SLA 2 ชม.)</span>
+                <span style={{ fontWeight: '600', color: 'var(--priority-high)' }}>สูง (High - SLA {formatSlaTime(stats.slaSettings?.high)})</span>
                 <span>{stats.priorityCounts.high} เคส</span>
               </div>
               <div style={{ height: '6px', backgroundColor: 'var(--surface-low)', borderRadius: '3px', overflow: 'hidden' }}>
@@ -304,7 +316,7 @@ export default function Dashboard() {
 
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                <span style={{ fontWeight: '600', color: 'var(--priority-medium)' }}>ปานกลาง (Medium - SLA 4 ชม.)</span>
+                <span style={{ fontWeight: '600', color: 'var(--priority-medium)' }}>ปานกลาง (Medium - SLA {formatSlaTime(stats.slaSettings?.medium)})</span>
                 <span>{stats.priorityCounts.medium} เคส</span>
               </div>
               <div style={{ height: '6px', backgroundColor: 'var(--surface-low)', borderRadius: '3px', overflow: 'hidden' }}>
@@ -312,6 +324,20 @@ export default function Dashboard() {
                   height: '100%', 
                   backgroundColor: 'var(--priority-medium)', 
                   width: `${(stats.priorityCounts.medium / (Object.values(stats.priorityCounts).reduce((a,b)=>a+b, 0) || 1)) * 100}%` 
+                }}></div>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+                <span style={{ fontWeight: '600', color: 'var(--secondary)' }}>ต่ำ (Low - SLA {formatSlaTime(stats.slaSettings?.low)})</span>
+                <span>{stats.priorityCounts.low} เคส</span>
+              </div>
+              <div style={{ height: '6px', backgroundColor: 'var(--surface-low)', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ 
+                  height: '100%', 
+                  backgroundColor: 'var(--secondary)', 
+                  width: `${(stats.priorityCounts.low / (Object.values(stats.priorityCounts).reduce((a,b)=>a+b, 0) || 1)) * 100}%` 
                 }}></div>
               </div>
             </div>
@@ -399,6 +425,66 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ADMIN CONTROLS (ADMIN ONLY) */}
+      {user.role === 'admin' && (
+        <>
+          <div className="card" style={{ marginTop: '20px', background: 'white', border: '1px solid var(--outline-light)', marginBottom: '12px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '700', color: 'var(--on-surface)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Users size={16} style={{ color: 'var(--primary)' }} />
+              ระบบจัดการสมาชิกและสิทธิ์การใช้งาน
+            </h3>
+            <p style={{ fontSize: '11px', color: 'var(--outline)', marginBottom: '14px' }}>
+              ผู้ดูแลระบบสามารถค้นหารายชื่อสมาชิก จัดการปรับเปลี่ยนสิทธิ์ และตั้งค่าการใช้งานในระบบได้
+            </p>
+            <Link 
+              to="/admin/users" 
+              className="btn btn-secondary btn-block" 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                gap: '8px', 
+                padding: '10px 14px',
+                textDecoration: 'none',
+                fontSize: '13px',
+                fontWeight: '600'
+              }}
+            >
+              <Users size={16} />
+              <span>จัดการรายชื่อและสิทธิ์สมาชิก</span>
+            </Link>
+          </div>
+
+          <div className="card" style={{ background: 'white', border: '1px solid var(--outline-light)' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '700', color: 'var(--on-surface)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Building2 size={16} style={{ color: 'var(--primary)' }} />
+              ระบบจัดการแผนกโรงพยาบาล
+            </h3>
+            <p style={{ fontSize: '11px', color: 'var(--outline)', marginBottom: '14px' }}>
+              ผู้ดูแลระบบสามารถเพิ่ม แก้ไขชื่อ และลบแผนกต่างๆ ที่ใช้ยืนยันการตั้งค่าผู้ใช้งานในระบบแจ้งซ่อมไอที
+            </p>
+            <Link 
+              to="/admin/departments" 
+              className="btn btn-secondary btn-block" 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                gap: '8px', 
+                padding: '10px 14px',
+                textDecoration: 'none',
+                fontSize: '13px',
+                fontWeight: '600'
+              }}
+            >
+              <Building2 size={16} />
+              <span>เข้าสู่หน้าจัดการแผนก (CRUD)</span>
+            </Link>
+          </div>
+        </>
+      )}
+
     </div>
   );
 }
+
