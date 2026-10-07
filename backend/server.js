@@ -883,6 +883,349 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
 
 
 // ==========================================
+// TECHNICIAN PERFORMANCE REPORT ENDPOINT
+// ==========================================
+app.get('/api/reports/technician-performance', authenticateToken, async (req, res) => {
+  try {
+    const { technician_id, start_date, end_date } = req.query;
+
+    // Helper functions for Thai locale & Bangkok timezone
+    const toThaiDate = (dateObj) => {
+      if (!dateObj) return '-';
+      const d = new Date(dateObj);
+      return d.toLocaleDateString('th-TH', { 
+        timeZone: 'Asia/Bangkok', 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    };
+
+    const toBangkokDateKey = (dateObj) => {
+      if (!dateObj) return '';
+      const d = new Date(dateObj);
+      return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+    };
+
+    const toThaiTime = (dateObj) => {
+      if (!dateObj) return null;
+      const d = new Date(dateObj);
+      return d.toLocaleTimeString('th-TH', { 
+        timeZone: 'Asia/Bangkok', 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+      }) + ' น.';
+    };
+
+    const getPeriodCategory = (dateObj) => {
+      if (!dateObj) return 'ไม่ระบุ';
+      const d = new Date(dateObj);
+      const timeStr = d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false }); // "HH:MM:SS"
+      const [h, m] = timeStr.split(':').map(Number);
+      const mins = h * 60 + m;
+
+      // เช้า (08.30-16.30 น.): 510 ถึงก่อน 990 นาที
+      if (mins >= 510 && mins < 990) {
+        return 'เวรเช้า (08:30 - 16:30 น.)';
+      }
+      // บ่าย (16.30-00.30 น.): 990 นาทีขึ้นไป หรือ 0 ถึงก่อน 30 นาที
+      else if (mins >= 990 || mins < 30) {
+        return 'เวรบ่าย (16:30 - 00:30 น.)';
+      }
+      // ดึก (00.30-08.30 น.): 30 ถึงก่อน 510 นาที
+      else {
+        return 'เวรดึก (00:30 - 08:30 น.)';
+      }
+    };
+
+    const formatDuration = (minutes) => {
+      if (minutes == null || isNaN(minutes)) return '-';
+      if (minutes < 1) return 'น้อยกว่า 1 นาที';
+      const h = Math.floor(minutes / 60);
+      const m = Math.round(minutes % 60);
+      if (h > 0) {
+        return m > 0 ? `${h} ชม. ${m} นาที` : `${h} ชม.`;
+      }
+      return `${m} นาที`;
+    };
+
+    // 1. Fetch technician list for filters
+    const [technicians] = await pool.query(`
+      SELECT id, display_name, picture_url, role, department 
+      FROM users 
+      WHERE role IN ('technician', 'admin') 
+         OR id IN (SELECT DISTINCT technician_id FROM tickets WHERE technician_id IS NOT NULL)
+      ORDER BY role DESC, display_name ASC
+    `);
+
+    // 2. Fetch all tickets assigned to technicians
+    let ticketSql = `
+      SELECT 
+        t.id AS ticket_id,
+        t.ticket_code,
+        t.title,
+        t.description,
+        t.category,
+        t.priority,
+        t.status,
+        t.technician_id,
+        tech.display_name AS technician_name,
+        tech.picture_url AS technician_avatar,
+        tech.department AS technician_dept,
+        req.display_name AS requester_name,
+        req.department AS requester_dept,
+        t.sla_minutes,
+        t.sla_deadline,
+        t.rating,
+        t.feedback,
+        t.created_at AS ticket_created_at,
+        t.updated_at AS ticket_updated_at,
+        (SELECT created_at FROM ticket_logs WHERE ticket_id = t.id AND action = 'assigned' ORDER BY created_at ASC LIMIT 1) AS assigned_at,
+        (SELECT created_at FROM ticket_logs WHERE ticket_id = t.id AND action = 'in_progress' ORDER BY created_at ASC LIMIT 1) AS started_at,
+        (SELECT created_at FROM ticket_logs WHERE ticket_id = t.id AND action = 'resolved' ORDER BY created_at DESC LIMIT 1) AS resolved_at,
+        (SELECT created_at FROM ticket_logs WHERE ticket_id = t.id AND action = 'closed' ORDER BY created_at DESC LIMIT 1) AS closed_at,
+        (SELECT note FROM ticket_logs WHERE ticket_id = t.id AND action = 'resolved' ORDER BY created_at DESC LIMIT 1) AS resolve_note,
+        (SELECT note FROM ticket_logs WHERE ticket_id = t.id ORDER BY created_at DESC LIMIT 1) AS latest_note
+      FROM tickets t
+      LEFT JOIN users tech ON t.technician_id = tech.id
+      LEFT JOIN users req ON t.requester_id = req.id
+      WHERE t.technician_id IS NOT NULL
+    `;
+    const params = [];
+
+    if (technician_id && technician_id !== 'all') {
+      ticketSql += ' AND t.technician_id = ?';
+      params.push(technician_id);
+    }
+
+    ticketSql += ' ORDER BY t.created_at DESC';
+
+    const [tickets] = await pool.query(ticketSql, params);
+
+    // Filter by date range (using Bangkok local date)
+    const filteredTickets = tickets.filter(t => {
+      const workStart = t.started_at || t.assigned_at || t.ticket_created_at;
+      const dateKey = toBangkokDateKey(workStart);
+      if (start_date && dateKey < start_date) return false;
+      if (end_date && dateKey > end_date) return false;
+      return true;
+    });
+
+    // 3. Process into daily groups per technician
+    const dailyMap = {};
+    const techStatsMap = {};
+
+    let totalTasks = 0;
+    let totalCompleted = 0;
+    let totalInProgress = 0;
+    let totalWorkingMinutes = 0;
+    let compliantCount = 0;
+    let totalRated = 0;
+    let sumRating = 0;
+
+    const periodCounts = {
+      morning: 0,
+      afternoon: 0,
+      night: 0
+    };
+
+    filteredTickets.forEach(t => {
+      const workStart = t.started_at || t.assigned_at || t.ticket_created_at;
+      const workEnd = t.resolved_at || (t.status === 'closed' ? t.closed_at : null);
+      const dateKey = toBangkokDateKey(workStart);
+      const groupKey = `${t.technician_id}_${dateKey}`;
+
+      const isCompleted = ['resolved', 'closed'].includes(t.status);
+      const durationMins = workEnd 
+        ? Math.max(0, Math.round((new Date(workEnd) - new Date(workStart)) / 60000))
+        : Math.max(0, Math.round((new Date() - new Date(workStart)) / 60000));
+
+      const isSlaCompliant = workEnd 
+        ? new Date(workEnd) <= new Date(t.sla_deadline)
+        : new Date() <= new Date(t.sla_deadline);
+
+      const period = getPeriodCategory(workStart);
+      if (period.includes('เวรเช้า')) periodCounts.morning++;
+      else if (period.includes('เวรบ่าย')) periodCounts.afternoon++;
+      else if (period.includes('เวรดึก')) periodCounts.night++;
+
+      // Global counters
+      totalTasks++;
+      if (isCompleted) {
+        totalCompleted++;
+        totalWorkingMinutes += durationMins;
+        if (isSlaCompliant) compliantCount++;
+      } else {
+        totalInProgress++;
+      }
+
+      if (t.rating) {
+        totalRated++;
+        sumRating += t.rating;
+      }
+
+      // Technician Summary Map
+      if (!techStatsMap[t.technician_id]) {
+        techStatsMap[t.technician_id] = {
+          technicianId: t.technician_id,
+          technicianName: t.technician_name,
+          technicianAvatar: t.technician_avatar,
+          technicianDept: t.technician_dept,
+          totalTasks: 0,
+          completedTasks: 0,
+          inProgressTasks: 0,
+          totalMinutes: 0,
+          slaCompliantCount: 0,
+          ratingSum: 0,
+          ratingCount: 0,
+          activeDates: new Set()
+        };
+      }
+      const tStat = techStatsMap[t.technician_id];
+      tStat.totalTasks++;
+      tStat.activeDates.add(dateKey);
+      if (isCompleted) {
+        tStat.completedTasks++;
+        tStat.totalMinutes += durationMins;
+        if (isSlaCompliant) tStat.slaCompliantCount++;
+      } else {
+        tStat.inProgressTasks++;
+      }
+      if (t.rating) {
+        tStat.ratingCount++;
+        tStat.ratingSum += t.rating;
+      }
+
+      // Daily Map
+      if (!dailyMap[groupKey]) {
+        const dObj = new Date(workStart);
+        const dayOfWeekThai = dObj.toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', weekday: 'long' });
+
+        dailyMap[groupKey] = {
+          groupKey,
+          date: dateKey,
+          thaiDate: toThaiDate(workStart),
+          dayOfWeekThai,
+          technicianId: t.technician_id,
+          technicianName: t.technician_name,
+          technicianAvatar: t.technician_avatar,
+          technicianDept: t.technician_dept,
+          taskCount: 0,
+          completedCount: 0,
+          inProgressCount: 0,
+          totalMinutesWorked: 0,
+          firstActivityDate: workStart,
+          lastActivityDate: workEnd || workStart,
+          slaCompliantCount: 0,
+          tasks: []
+        };
+      }
+
+      const dGroup = dailyMap[groupKey];
+      dGroup.taskCount++;
+      if (isCompleted) {
+        dGroup.completedCount++;
+        dGroup.totalMinutesWorked += durationMins;
+        if (isSlaCompliant) dGroup.slaCompliantCount++;
+      } else {
+        dGroup.inProgressCount++;
+      }
+
+      if (new Date(workStart) < new Date(dGroup.firstActivityDate)) {
+        dGroup.firstActivityDate = workStart;
+      }
+      const thisEnd = workEnd || workStart;
+      if (new Date(thisEnd) > new Date(dGroup.lastActivityDate)) {
+        dGroup.lastActivityDate = thisEnd;
+      }
+
+      const timeSlotStr = workEnd 
+        ? `${toThaiTime(workStart)} - ${toThaiTime(workEnd)}`
+        : `${toThaiTime(workStart)} - ปัจจุบัน (กำลังดำเนินการ)`;
+
+      dGroup.tasks.push({
+        ticketId: t.ticket_id,
+        ticketCode: t.ticket_code,
+        title: t.title,
+        description: t.description,
+        category: t.category,
+        priority: t.priority,
+        status: t.status,
+        requesterName: t.requester_name,
+        requesterDept: t.requester_dept,
+        workStartTime: workStart,
+        workEndTime: workEnd,
+        timeSlotThai: timeSlotStr,
+        periodCategory: period,
+        durationMinutes: durationMins,
+        durationFormatted: formatDuration(durationMins),
+        slaDeadline: t.sla_deadline,
+        slaMet: isSlaCompliant,
+        rating: t.rating,
+        feedback: t.feedback,
+        note: t.resolve_note || t.latest_note || '-'
+      });
+    });
+
+    // Format dailyReport
+    const dailyReport = Object.values(dailyMap).map(d => {
+      // Sort tasks chronologically by workStartTime
+      d.tasks.sort((a, b) => new Date(a.workStartTime) - new Date(b.workStartTime));
+
+      return {
+        ...d,
+        firstActivityTime: toThaiTime(d.firstActivityDate),
+        lastActivityTime: toThaiTime(d.lastActivityDate),
+        workingWindow: `${toThaiTime(d.firstActivityDate)} - ${toThaiTime(d.lastActivityDate)}`,
+        totalMinutesFormatted: formatDuration(d.totalMinutesWorked),
+        slaComplianceRate: d.completedCount > 0 ? Math.round((d.slaCompliantCount / d.completedCount) * 100) : 100
+      };
+    }).sort((a, b) => b.date.localeCompare(a.date));
+
+    // Format technician summaries
+    const technicianSummary = Object.values(techStatsMap).map(t => ({
+      technicianId: t.technicianId,
+      technicianName: t.technicianName,
+      technicianAvatar: t.technicianAvatar,
+      technicianDept: t.technicianDept,
+      totalActiveDays: t.activeDates.size,
+      totalTasks: t.totalTasks,
+      completedTasks: t.completedTasks,
+      inProgressTasks: t.inProgressTasks,
+      totalMinutes: t.totalMinutes,
+      totalMinutesFormatted: formatDuration(t.totalMinutes),
+      avgMinutesPerTask: t.completedTasks > 0 ? Math.round(t.totalMinutes / t.completedTasks) : 0,
+      slaComplianceRate: t.completedTasks > 0 ? Math.round((t.slaCompliantCount / t.completedTasks) * 100) : 100,
+      avgRating: t.ratingCount > 0 ? (t.ratingSum / t.ratingCount).toFixed(1) : null
+    }));
+
+    res.json({
+      success: true,
+      technicians,
+      summary: {
+        totalTasks,
+        totalCompleted,
+        totalInProgress,
+        totalWorkingMinutes,
+        totalWorkingHoursFormatted: formatDuration(totalWorkingMinutes),
+        avgMinutesPerTask: totalCompleted > 0 ? Math.round(totalWorkingMinutes / totalCompleted) : 0,
+        slaComplianceRate: totalCompleted > 0 ? Math.round((compliantCount / totalCompleted) * 100) : 100,
+        avgRating: totalRated > 0 ? (sumRating / totalRated).toFixed(1) : null,
+        periodCounts
+      },
+      dailyReport,
+      technicianSummary
+    });
+
+  } catch (err) {
+    console.error('Error generating technician performance report:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ==========================================
 // LINE OA WEBHOOK ENDPOINT
 // ==========================================
 

@@ -62,6 +62,14 @@ CREATE TABLE ticket_logs (
     FOREIGN KEY (actor_id) REFERENCES users(id)
 );
 
+-- 5. สร้างตาราง departments (สำหรับแผนกผู้ใช้งานในโรงพยาบาล)
+CREATE TABLE IF NOT EXISTS departments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- ==========================================
 -- SEED DATA (ข้อมูลการตั้งค่าเบื้องต้นของระบบ)
 -- ==========================================
@@ -71,4 +79,17 @@ INSERT INTO sla_settings (priority, minutes) VALUES
 ('low', 480),       -- 8 ชั่วโมง
 ('medium', 240),    -- 4 ชั่วโมง
 ('high', 120),      -- 2 ชั่วโมง
-('critical', 60);    -- 1 ชั่วโมง
+('critical', 60)    -- 1 ชั่วโมง
+ON DUPLICATE KEY UPDATE minutes = minutes;
+
+-- เพิ่มแผนกเริ่มต้นของโรงพยาบาล
+INSERT INTO departments (name) VALUES 
+('ทั่วไป'),
+('OPD (แผนกผู้ป่วยนอก)'),
+('IPD (แผนกผู้ป่วยใน)'),
+('ห้องอุบัติเหตุและฉุกเฉิน (ER)'),
+('ทันตกรรม (Dental)'),
+('เภสัชกรรม (Pharmacy)'),
+('ศูนย์คอมพิวเตอร์')
+ON DUPLICATE KEY UPDATE name = name;
+

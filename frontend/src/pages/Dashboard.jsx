@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { API_BASE } from '../config';
 import { 
   PlusCircle, ClipboardList, Activity, Clock, 
-  Settings, Award, RefreshCw, AlertOctagon, CheckCircle2, Building2, Users 
+  Settings, Award, RefreshCw, AlertOctagon, CheckCircle2, Building2, Users, Briefcase 
 } from 'lucide-react';
 
 // Helper: Convert minutes to readable Thai time string
@@ -422,6 +422,41 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* TECHNICIAN & ADMIN REPORT SECTION */}
+      {(user.role === 'admin' || user.role === 'technician') && (
+        <div className="card" style={{ marginTop: '20px', background: 'linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%)', border: '1px solid #bfdbfe', marginBottom: '12px', padding: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: '800', color: 'var(--on-surface)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+              <Briefcase size={18} style={{ color: 'var(--primary)' }} />
+              รายงานผลการปฏิบัติงานของช่างไอที
+            </h3>
+            <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '10px', backgroundColor: 'var(--primary)', color: 'white' }}>
+              รายงานใหม่
+            </span>
+          </div>
+          <p style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginBottom: '14px', lineHeight: '1.5' }}>
+            สรุปเวลาปฏิบัติงานจริงแต่ละวัน จำนวนงานที่ให้บริการ และช่วงเวลาการซ่อม (ช่วงเช้า/บ่าย/ดึก) พร้อมส่งออก Excel/CSV และพิมพ์รายงานทางการ
+          </p>
+          <Link 
+            to="/reports/technician-performance" 
+            className="btn btn-primary btn-block" 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: '8px', 
+              padding: '10px 14px',
+              textDecoration: 'none',
+              fontSize: '13px',
+              fontWeight: '700'
+            }}
+          >
+            <Briefcase size={16} />
+            <span>เปิดรายงานผลการปฏิบัติงานช่าง</span>
+          </Link>
         </div>
       )}
 

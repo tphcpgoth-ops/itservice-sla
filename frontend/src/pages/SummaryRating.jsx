@@ -1,14 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_BASE } from '../config';
-import { ArrowLeft, RefreshCw, Star, Heart, MessageSquare, Send } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Star, Clock, AlertTriangle, CheckCircle2, MessageSquare, CheckSquare } from 'lucide-react';
+
+// Helper to format duration
+function formatDuration(startStr, endStr) {
+  if (!startStr || !endStr) return 'ไม่ทราบเวลา';
+  const start = new Date(startStr);
+  const end = new Date(endStr);
+  const diffMs = end - start;
+  if (diffMs < 0) return '0 นาที';
+  const mins = Math.floor(diffMs / 60000);
+  if (mins >= 60) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m > 0 ? `${h} ชม. ${m} นาที` : `${h} ชม.`;
+  }
+  return `${mins} นาที`;
+}
 
 export default function SummaryRating() {
   const { id } = useParams();
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-
+  
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -97,114 +112,214 @@ export default function SummaryRating() {
     );
   }
 
+  // Calculate SLA values
+  const totalTimeStr = formatDuration(ticket.created_at, ticket.updated_at);
+  const isSlaHealthy = new Date(ticket.updated_at) <= new Date(ticket.sla_deadline);
+
   return (
-    <div style={{ padding: '16px' }} className="animated-fade">
+    <div style={{ padding: '16px', maxWidth: '780px', margin: '0 auto' }} className="animated-fade">
       
-      {/* Header Nav */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+      {/* Top Bar Navigation */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
         <button 
           onClick={() => navigate(`/ticket/${id}`)} 
           style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '4px', color: 'var(--on-background)' }}
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={24} />
         </button>
-        <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--on-background)' }}>
-          แบบประเมินผู้ใช้และปิดตั๋ว
-        </h2>
       </div>
 
-      {/* Ticket Details Summary Info */}
-      <div className="card" style={{ background: 'white', marginBottom: '20px' }}>
-        <span style={{ fontSize: '11px', color: 'var(--outline)', fontWeight: '600' }}>สรุปประวัติงานซ่อม:</span>
-        <h4 style={{ fontSize: '14px', fontWeight: '700', color: 'var(--on-surface)', marginTop: '4px', marginBottom: '4px' }}>
-          [{ticket.ticket_code}] {ticket.title}
-        </h4>
-        <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)' }}>
-          ช่างไอทีผู้แก้ไข: <strong>{ticket.technician_name || '-'}</strong>
+      {/* Summary Header */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '24px' }}>
+        <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--primary)', letterSpacing: '0.05em' }}>
+          TICKET #{ticket.ticket_code}
         </div>
-      </div>
-
-      {/* Main Review Form Card */}
-      <form onSubmit={handleRatingSubmit} className="card" style={{ background: 'white', margin: 0, textAlign: 'center', padding: '24px 16px' }}>
-        
-        <div style={{
-          width: '56px',
-          height: '56px',
-          borderRadius: '50%',
-          backgroundColor: '#ffebee',
-          color: '#e53935',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: '16px'
-        }}>
-          <Heart size={30} fill="#e53935" />
-        </div>
-
-        <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--on-surface)', marginBottom: '8px' }}>
-          ความพึงพอใจการให้บริการไอที
-        </h3>
-        <p style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginBottom: '20px' }}>
-          ความเห็นและการประเมินดาวของคุณมีส่วนสำคัญอย่างยิ่งในการรักษาและรับรองความพร้อมใช้งานของระบบ SLA
+        <h1 style={{ fontSize: '28px', fontWeight: '700', lineHeight: '34px', letterSpacing: '-0.02em', color: 'var(--on-background)', margin: '4px 0' }}>
+          สรุปรายละเอียดการซ่อม
+        </h1>
+        <p style={{ fontSize: '14px', color: 'var(--on-surface-variant)', margin: 0 }}>
+          {ticket.title} (แผนก {ticket.requester_dept})
         </p>
+      </div>
 
-        {/* Stars Selector UI */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '24px' }}>
-          {[1, 2, 3, 4, 5].map((star) => (
-            <button
-              key={star}
-              type="button"
-              onClick={() => setRating(star)}
-              onMouseEnter={() => setHoverRating(star)}
-              onMouseLeave={() => setHoverRating(0)}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '4px',
-                color: (hoverRating || rating) >= star ? '#FFC107' : 'var(--outline-light)',
-                transition: 'transform 0.1s'
-              }}
-            >
-              <Star size={36} fill={(hoverRating || rating) >= star ? '#FFC107' : 'none'} strokeWidth={2} />
-            </button>
-          ))}
+      {/* Bento Layout Summary Cards */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
+        gap: '16px', 
+        marginBottom: '24px' 
+      }}>
+        
+        {/* SLA Card */}
+        <div style={{ 
+          gridColumn: '1 / -1',
+          padding: '24px', 
+          borderRadius: '12px', 
+          backgroundColor: 'var(--surface)', 
+          border: '1px solid var(--outline-light)',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#d5e0f7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Clock size={28} color="var(--primary)" />
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--on-surface-variant)' }}>เวลาดำเนินการทั้งหมด (Total SLA)</div>
+              <div style={{ fontSize: '22px', fontWeight: '600', color: 'var(--on-surface)' }}>{totalTimeStr}</div>
+            </div>
+          </div>
+          
+          <div style={{ 
+            display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', borderRadius: '9999px',
+            backgroundColor: isSlaHealthy ? '#E8F5E9' : '#ffebee',
+            color: isSlaHealthy ? '#2E7D32' : '#c62828'
+          }}>
+            <CheckCircle2 size={18} fill={isSlaHealthy ? "currentColor" : "none"} color={isSlaHealthy ? "white" : "currentColor"} />
+            <span style={{ fontSize: '12px', fontWeight: '600' }}>
+              {isSlaHealthy ? 'ภายในกำหนด (SLA Healthy)' : 'ล่าช้ากว่ากำหนด (SLA Breached)'}
+            </span>
+          </div>
         </div>
 
+        {/* Issues Card */}
+        <div style={{ 
+          padding: '20px', 
+          borderRadius: '12px', 
+          backgroundColor: 'var(--surface)', 
+          border: '1px solid var(--outline-light)',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.05)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <AlertTriangle size={20} color="#9e3d00" />
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--on-surface)', margin: 0 }}>ปัญหาที่พบ</h3>
+          </div>
+          <p style={{ fontSize: '14px', color: 'var(--on-surface-variant)', lineHeight: '1.6', whiteSpace: 'pre-wrap', margin: 0 }}>
+            {ticket.description}
+          </p>
+        </div>
+
+      </div>
+
+      {/* Satisfaction Rating Section */}
+      <form onSubmit={handleRatingSubmit} style={{ 
+        marginTop: '16px', 
+        padding: '24px', 
+        borderRadius: '12px', 
+        backgroundColor: '#d8e2ff', // primary-fixed
+        color: '#001a41', // on-primary-fixed
+        border: '1px solid #adc6ff',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.05)'
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <h2 style={{ fontSize: '22px', fontWeight: '600', marginBottom: '4px', marginTop: 0 }}>ประเมินความพึงพอใจ</h2>
+          <p style={{ fontSize: '14px', opacity: 0.8, margin: 0 }}>ความคิดเห็นของท่านช่วยให้เราพัฒนาบริการดียิ่งขึ้น</p>
+        </div>
+
+        {/* Rating Stars */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '32px' }}>
+          {[1, 2, 3, 4, 5].map((star) => {
+            const isActive = (hoverRating || rating) >= star;
+            return (
+              <button
+                key={star}
+                type="button"
+                onClick={() => setRating(star)}
+                onMouseEnter={() => setHoverRating(star)}
+                onMouseLeave={() => setHoverRating(0)}
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: isActive ? '#0070eb' : 'var(--outline-variant)',
+                  transform: hoverRating === star ? 'scale(1.1)' : 'scale(1)',
+                  transition: 'transform 0.15s, color 0.15s'
+                }}
+              >
+                <Star size={40} fill={isActive ? "currentColor" : "none"} strokeWidth={1.5} />
+              </button>
+            );
+          })}
+        </div>
+        
         {/* Rating text description */}
-        <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--primary)', marginBottom: '24px' }}>
+        <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--primary)', textAlign: 'center', marginBottom: '24px' }}>
           {rating === 5 ? '⭐ ยอดเยี่ยมที่สุด (SLA ดีเลิศ)' :
            rating === 4 ? '⭐ ดีมาก (ประทับใจการบริการ)' :
            rating === 3 ? '⭐ ปานกลาง (แก้ไขได้ตามกำหนด)' :
-           rating === 2 ? '⭐ พอใช้ (ชล่าช้าหรือซ่อมแล้วยังมีจุดติด)' : '⭐ ปรับปรุงด่วน (เกินเวลา SLA มาก / ซ่อมไม่สำเร็จ)'}
+           rating === 2 ? '⭐ พอใช้ (ล่าช้าหรือซ่อมแล้วยังมีจุดติด)' : '⭐ ปรับปรุงด่วน (เกินเวลา SLA มาก / ซ่อมไม่สำเร็จ)'}
         </div>
 
-        {/* Feedback text area */}
-        <div className="form-group" style={{ textAlign: 'left', marginBottom: '24px' }}>
-          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <MessageSquare size={14} />
-            ความคิดเห็น / คำแนะนำเพิ่มเติม
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
+          <label style={{ fontSize: '12px', fontWeight: '600', letterSpacing: '0.05em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <MessageSquare size={14} /> ข้อเสนอแนะเพิ่มเติม
           </label>
-          <textarea
-            className="form-control"
-            style={{ minHeight: '80px' }}
-            placeholder="ข้อความเพิ่มเติมที่จะส่งเป็นคำขอบคุณ หรือแนะแนวช่าง..."
+          <textarea 
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
+            placeholder="กรอกความเห็นของคุณที่นี่..." 
+            rows="3"
+            style={{
+              width: '100%',
+              padding: '16px',
+              borderRadius: '8px',
+              backgroundColor: 'white',
+              border: '1px solid var(--outline-light)',
+              fontSize: '14px',
+              outline: 'none',
+              resize: 'vertical',
+              boxSizing: 'border-box',
+              transition: 'border-color 0.2s',
+              fontFamily: 'inherit'
+            }}
+            onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+            onBlur={(e) => e.target.style.borderColor = 'var(--outline-light)'}
           ></textarea>
         </div>
 
-        {/* Submit */}
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="btn btn-primary btn-block"
-          style={{ padding: '14px', backgroundColor: 'var(--status-resolved)' }}
-        >
-          <Send size={16} />
-          {isSubmitting ? 'กำลังส่งแบบประเมิน...' : 'ส่งและปิดใบแจ้งซ่อมสำเร็จ'}
-        </button>
-
+        {/* Action Button */}
+        <div style={{ marginTop: '16px' }}>
+          <button 
+            type="submit"
+            disabled={isSubmitting}
+            style={{
+              width: '100%',
+              height: '56px',
+              backgroundColor: 'var(--primary)',
+              color: 'white',
+              borderRadius: '12px',
+              fontWeight: '700',
+              fontSize: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+              transition: 'transform 0.1s, background-color 0.2s',
+              opacity: isSubmitting ? 0.7 : 1
+            }}
+            onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.98)'}
+            onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            <CheckSquare size={20} />
+            {isSubmitting ? 'กำลังส่งข้อมูล...' : 'ปิดงาน (Close Ticket)'}
+          </button>
+          <p style={{ textAlign: 'center', fontSize: '12px', color: '#3c475a', marginTop: '16px', opacity: 0.8 }}>
+            เมื่อกดปุ่มระบบจะบันทึกสถานะงานเป็น 'เสร็จสมบูรณ์' และแจ้งผู้ที่เกี่ยวข้องทราบ
+          </p>
+        </div>
       </form>
 
     </div>

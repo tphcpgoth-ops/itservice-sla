@@ -1,0 +1,59 @@
+services:
+  # ==========================================
+  # 1. Hospital IT Service Tracker (Node.js + React)
+  # ==========================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: itservice-app
+    restart: unless-stopped
+    ports:
+      - "8008:8008"
+    environment:
+      - PORT=8008
+      - JWT_SECRET=${JWT_SECRET:-supersecretjwtkeyforhospitalitservice2026}
+      - DB_HOST=${DB_HOST:-db}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-hospital_db_pass_2026}
+      - DB_NAME=${DB_NAME:-itservice}
+      - DB_PORT=${DB_PORT:-3306}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8008}
+      - LINE_LOGIN_CHANNEL_ID=${LINE_LOGIN_CHANNEL_ID:-1654103357}
+      - LINE_LOGIN_CHANNEL_SECRET=${LINE_LOGIN_CHANNEL_SECRET:-92c3120d5b7dd7f98d570dcd317df5a1}
+      - LINE_LOGIN_CALLBACK_URL=${LINE_LOGIN_CALLBACK_URL:-http://localhost:8008/api/auth/line/callback}
+      - LINE_MESSAGING_CHANNEL_ACCESS_TOKEN=${LINE_MESSAGING_CHANNEL_ACCESS_TOKEN:-}
+      - LINE_MESSAGING_CHANNEL_SECRET=${LINE_MESSAGING_CHANNEL_SECRET:-19f1662a660fbce41a0e4557daff0efd}
+      - LINE_IT_GROUP_ID=${LINE_IT_GROUP_ID:-C6c3b330050aac48e4851dea514734250}
+    volumes:
+      - app_uploads:/app/backend/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ==========================================
+  # 2. Database Service (MariaDB 10.11)
+  # ==========================================
+  db:
+    image: mariadb:10.11
+    container_name: itservice-db
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD:-hospital_db_pass_2026}
+      - MYSQL_DATABASE=${DB_NAME:-itservice}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./backend/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    ports:
+      - "127.0.0.1:3307:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  app_uploads:
+    name: itservice_app_uploads
+  db_data:
+    name: itservice_db_data
