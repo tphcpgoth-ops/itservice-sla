@@ -10,7 +10,7 @@ import ManageDepartments from './pages/ManageDepartments';
 import ManageUsers from './pages/ManageUsers';
 import TechnicianPerformanceReport from './pages/TechnicianPerformanceReport';
 
-import { LogOut, Home, ClipboardList, Shield, User, RefreshCw, Building2, CheckCircle2, AlertCircle, Briefcase } from 'lucide-react';
+import { LogOut, Home, ClipboardList, Shield, User, RefreshCw, Building2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { API_BASE } from './config';
 
 // 1. Redirect helper callback component
@@ -398,29 +398,6 @@ function AppLayout({ children }) {
 
           {/* User profile & Logout */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {(userState.role === 'admin' || userState.role === 'technician') && (
-              <Link 
-                to="/reports/technician-performance" 
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '5px 9px',
-                  backgroundColor: location.pathname.startsWith('/reports') ? 'var(--primary-light)' : '#f1f5f9',
-                  color: location.pathname.startsWith('/reports') ? 'var(--primary)' : 'var(--on-surface)',
-                  borderRadius: '6px',
-                  textDecoration: 'none',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  border: '1px solid',
-                  borderColor: location.pathname.startsWith('/reports') ? 'var(--primary)' : 'var(--outline-light)'
-                }}
-                title="รายงานผลการปฏิบัติงานช่างไอที"
-              >
-                <Briefcase size={13} style={{ color: 'var(--primary)' }} />
-                <span>รายงานช่าง</span>
-              </Link>
-            )}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <img 
