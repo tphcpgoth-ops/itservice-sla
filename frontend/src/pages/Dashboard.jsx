@@ -385,10 +385,20 @@ export default function Dashboard() {
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {['low', 'medium', 'high', 'critical'].map((prio) => (
+            {['critical', 'high', 'medium', 'low'].map((prio) => (
               <div key={prio} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', paddingBottom: '8px', borderBottom: '1px solid var(--outline-light)' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', color: prio === 'critical' ? 'var(--status-pending)' : prio === 'high' ? 'var(--status-progress)' : 'var(--outline)' }}>
-                  {prio === 'low' ? 'ต่ำ (Low)' : prio === 'medium' ? 'ปานกลาง (Medium)' : prio === 'high' ? 'สูง (High)' : 'วิกฤต (Critical)'}
+                <span style={{ 
+                  fontSize: '12px', 
+                  fontWeight: '700', 
+                  color: prio === 'critical' 
+                    ? 'var(--priority-critical)' 
+                    : prio === 'high' 
+                    ? 'var(--priority-high)' 
+                    : prio === 'medium' 
+                    ? 'var(--priority-medium)' 
+                    : 'var(--priority-low)' 
+                }}>
+                  {prio === 'critical' ? 'วิกฤต (Critical)' : prio === 'high' ? 'สูง (High)' : prio === 'medium' ? 'ปานกลาง (Medium)' : 'ต่ำ (Low)'}
                 </span>
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
