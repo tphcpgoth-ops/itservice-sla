@@ -158,8 +158,11 @@ docker compose logs -f app
 
 ```bash
 cd /www/wwwroot/itservice
-git pull
-docker compose up -d --build
+# 1. ดึงโค้ดล่าสุดจาก GitHub
+git pull origin main
+# 2. Rebuild และเริ่มรัน Docker ใหม่
+docker-compose up -d --build
+# (หรือหากติดตั้ง docker compose v2 แล้ว ให้ใช้: docker compose up -d --build)
 ```
 ระบบจะทำการ Rebuild Frontend & Backend ใหม่อัตโนมัติ โดยที่ข้อมูลในฐานข้อมูล (`db_data`) และรูปภาพที่ผู้ใช้เคยอัปโหลด (`app_uploads`) จะยังคงอยู่ครบถ้วน 100%
 

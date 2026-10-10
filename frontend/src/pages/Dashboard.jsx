@@ -523,7 +523,7 @@ export default function Dashboard() {
               }}
             >
               <Building2 size={16} />
-              <span>เข้าสู่หน้าจัดการแผนก (CRUD)</span>
+              <span>เข้าสู่หน้าจัดการแผนก</span>
             </Link>
           </div>
         </>
