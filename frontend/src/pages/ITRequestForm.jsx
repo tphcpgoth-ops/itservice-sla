@@ -66,10 +66,34 @@ export default function ITRequestForm() {
   ];
 
   const priorities = [
-    { value: 'low', label: `ต่ำ (SLA ${formatSlaTime(slaSettings.low)} - เคสทั่วไป)`, desc: 'ไม่มีผลกระทบต่อผู้ป่วยหรืองานบริการห้องตรวจ' },
-    { value: 'medium', label: `ปานกลาง (SLA ${formatSlaTime(slaSettings.medium)} - งานแผนก)`, desc: 'อุปกรณ์บางส่วนเสียหาย แต่มีเครื่องทดแทนทำงานได้' },
-    { value: 'high', label: `สูง (SLA ${formatSlaTime(slaSettings.high)} - บริการตรง)`, desc: 'ส่งผลกระทบโดยตรงต่อคิวคนไข้หรือการบริการหลัก' },
-    { value: 'critical', label: `วิกฤต (SLA ${formatSlaTime(slaSettings.critical)} - ระบบล่ม)`, desc: 'ระบบโรงพยาบาลล่ม หรือเครื่องแพทย์ขัดข้องเร่งด่วนที่สุด!' }
+    { 
+      value: 'critical', 
+      label: `วิกฤต (SLA ${formatSlaTime(slaSettings.critical)} - ระบบล่ม)`, 
+      desc: 'ระบบโรงพยาบาลล่ม หรือเครื่องแพทย์ขัดข้องเร่งด่วนที่สุด!',
+      color: 'var(--priority-critical)',
+      bgLight: 'var(--status-pending-bg)'
+    },
+    { 
+      value: 'high', 
+      label: `สูง (SLA ${formatSlaTime(slaSettings.high)} - บริการตรง)`, 
+      desc: 'ส่งผลกระทบโดยตรงต่อคิวคนไข้หรือการบริการหลัก',
+      color: 'var(--priority-high)',
+      bgLight: 'var(--status-progress-bg)'
+    },
+    { 
+      value: 'medium', 
+      label: `ปานกลาง (SLA ${formatSlaTime(slaSettings.medium)} - งานแผนก)`, 
+      desc: 'อุปกรณ์บางส่วนเสียหาย แต่มีเครื่องทดแทนทำงานได้',
+      color: 'var(--priority-medium)',
+      bgLight: 'var(--primary-light)'
+    },
+    { 
+      value: 'low', 
+      label: `ต่ำ (SLA ${formatSlaTime(slaSettings.low)} - เคสทั่วไป)`, 
+      desc: 'ไม่มีผลกระทบต่อผู้ป่วยหรืองานบริการห้องตรวจ',
+      color: 'var(--priority-low)',
+      bgLight: '#f1f5f9'
+    }
   ];
 
   const handleImageChange = (e) => {
@@ -340,39 +364,42 @@ export default function ITRequestForm() {
         <div className="form-group" style={{ marginBottom: '24px' }}>
           <label className="form-label">ระดับความเร่งด่วนตามเงื่อนไข SLA</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
-            {priorities.map((p) => (
-              <label 
-                key={p.value} 
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '10px',
-                  padding: '10px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  border: formData.priority === p.value ? '2px solid var(--primary)' : '1px solid var(--outline-light)',
-                  backgroundColor: formData.priority === p.value ? 'var(--primary-light)' : 'white',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <input 
-                  type="radio" 
-                  name="priority" 
-                  value={p.value}
-                  checked={formData.priority === p.value}
-                  onChange={() => setFormData({ ...formData, priority: p.value })}
-                  style={{ marginTop: '3px' }}
-                />
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: '700', color: formData.priority === p.value ? 'var(--primary)' : 'var(--on-surface)' }}>
-                    {p.label}
+            {priorities.map((p) => {
+              const isSelected = formData.priority === p.value;
+              return (
+                <label 
+                  key={p.value} 
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: isSelected ? `2px solid ${p.color}` : '1px solid var(--outline-light)',
+                    backgroundColor: isSelected ? p.bgLight : 'white',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <input 
+                    type="radio" 
+                    name="priority" 
+                    value={p.value}
+                    checked={isSelected}
+                    onChange={() => setFormData({ ...formData, priority: p.value })}
+                    style={{ marginTop: '3px', accentColor: p.color }}
+                  />
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: p.color }}>
+                      {p.label}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--on-surface-variant)', marginTop: '2px' }}>
+                      {p.desc}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--on-surface-variant)', marginTop: '2px' }}>
-                    {p.desc}
-                  </div>
-                </div>
-              </label>
-            ))}
+                </label>
+              );
+            })}
           </div>
         </div>
 
